@@ -1,0 +1,61 @@
+@reference "tailwindcss";
+
+.header {
+  @apply sticky top-0 z-40 border-b border-white/10 bg-black/80 backdrop-blur;
+}
+
+.inner {
+  @apply mx-auto flex h-14 max-w-[1680px] items-center justify-between px-4 sm:px-6 lg:px-10;
+}
+
+.left {
+  @apply flex items-center gap-5;
+}
+
+.brand {
+  @apply flex items-center;
+}
+
+.logoImg {
+  @apply h-9 w-auto select-none;
+}
+
+.nav {
+  @apply hidden md:flex items-center gap-6 text-sm text-zinc-200;
+}
+
+.link {
+  @apply hover:text-white transition;
+}
+
+.right {
+  @apply flex items-center gap-3;
+}
+
+.actions {
+  @apply hidden sm:flex items-center gap-2;
+}
+
+.langBtn {
+  @apply hidden sm:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-zinc-200 hover:bg-white/10 hover:text-white transition;
+}
+
+.langText {
+  @apply text-zinc-200;
+}
+
+.icon {
+  @apply h-4 w-4 text-zinc-300;
+}
+
+.iconSm {
+  @apply h-4 w-4 text-zinc-400;
+}
+
+.avatarBtn {
+  @apply grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/5 hover:bg-white/10 transition;
+}
+
+.avatar {
+  @apply h-7 w-7 rounded-full bg-white/10;
+}

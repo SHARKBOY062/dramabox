@@ -1,0 +1,43 @@
+@reference "tailwindcss";
+
+.panel {
+  @apply w-full rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5;
+}
+
+.breadcrumb {
+  @apply flex flex-wrap items-center gap-2 text-xs text-zinc-400;
+}
+
+.crumbMuted { @apply text-zinc-500; }
+.crumbActive { @apply text-zinc-200; }
+.slash { @apply text-zinc-600; }
+
+.title {
+  @apply mt-3 text-2xl sm:text-3xl font-semibold leading-tight;
+}
+
+.sectionTitle {
+  @apply mt-5 text-sm font-semibold text-zinc-200;
+}
+
+.description {
+  @apply mt-2 text-sm leading-relaxed text-zinc-400;
+}
+
+.more {
+  @apply text-rose-500 hover:text-rose-400 transition;
+}
+
+.divider {
+  @apply my-4 h-px w-full bg-white/10;
+}
+
+.episodesHeader {
+  @apply flex items-center justify-between gap-3;
+}
+
+.allEpisodes {
+  @apply hidden sm:flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition;
+}
+
+.chev { @apply text-zinc-600; }

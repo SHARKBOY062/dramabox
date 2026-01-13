@@ -1,0 +1,64 @@
+@reference "tailwindcss";
+
+.wrap {
+  @apply mt-4 grid gap-2;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+/* Tablet */
+@media (min-width: 640px) {
+  .wrap { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
+
+/* Desktop */
+@media (min-width: 1024px) {
+  .wrap { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
+
+.ep {
+  @apply relative h-11 rounded-lg border border-white/10 bg-white/5 transition;
+  @apply flex items-center justify-center gap-2;
+  @apply text-sm text-zinc-200;
+  @apply hover:bg-white/10 hover:text-white;
+  @apply focus:outline-none focus:ring-2 focus:ring-rose-500/70;
+  user-select: none;
+}
+
+.unlocked {
+  @apply cursor-pointer;
+}
+
+.locked {
+  @apply cursor-pointer opacity-85;
+}
+
+/* Selecionado (episódio atual) */
+.selected {
+  @apply border-rose-500/40 ring-2 ring-rose-500/50 bg-white/10;
+}
+
+.number {
+  @apply font-semibold tracking-tight;
+}
+
+/* Ícones / trailing */
+.trailing {
+  @apply absolute right-2 top-1/2 -translate-y-1/2 grid place-items-center;
+}
+
+.icon {
+  @apply h-4 w-4;
+}
+
+.lockIcon {
+  @apply text-zinc-300;
+}
+
+.playIcon {
+  @apply text-rose-300;
+}
+
+/* Pontinho sutil para os desbloqueados não selecionados */
+.dot {
+  @apply h-1.5 w-1.5 rounded-full bg-white/25;
+}

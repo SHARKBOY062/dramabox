@@ -1,0 +1,25 @@
+@reference "tailwindcss";
+
+.row {
+  @apply flex items-center justify-between gap-4;
+}
+
+.item {
+  @apply flex items-center gap-2 text-zinc-200;
+}
+
+.icon {
+  @apply text-lg text-zinc-300;
+}
+
+.value {
+  @apply text-sm text-zinc-300;
+}
+
+.share {
+  @apply ml-auto flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition;
+}
+
+.shareIcon {
+  @apply text-base;
+}

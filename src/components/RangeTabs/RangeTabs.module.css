@@ -1,0 +1,18 @@
+@reference "tailwindcss";
+
+.tabs {
+  @apply flex items-center gap-6 text-sm;
+}
+
+.tab {
+  @apply relative text-zinc-400 hover:text-zinc-200 transition;
+}
+
+.active {
+  @apply text-rose-500;
+}
+
+.active::after {
+  content: "";
+  @apply absolute -bottom-2 left-0 h-0.5 w-full bg-rose-500 rounded;
+}

@@ -1,0 +1,31 @@
+@reference "tailwindcss";
+
+.page {
+  @apply min-h-dvh bg-black text-zinc-100;
+}
+
+/* mais largo e com padding maior (preenche o espaço) */
+.contentWrap {
+  @apply mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-10;
+}
+
+/* layout principal */
+.contentGrid {
+  @apply grid gap-6 lg:gap-8 py-6 lg:py-8;
+  grid-template-columns: 1fr;
+}
+
+/* desktop: vídeo grande + painel grande */
+@media (min-width: 1024px) {
+  .contentGrid {
+    grid-template-columns: minmax(520px, 760px) minmax(640px, 1fr);
+    align-items: start;
+  }
+}
+
+/* telas muito grandes: enche ainda mais */
+@media (min-width: 1440px) {
+  .contentGrid {
+    grid-template-columns: minmax(560px, 820px) minmax(760px, 1fr);
+  }
+}
