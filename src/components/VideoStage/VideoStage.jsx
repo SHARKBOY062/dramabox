@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import IconButton from "../IconButton/IconButton.jsx";
 import PaywallModal from "../PaywallModal/PaywallModal.jsx";
 import styles from "./VideoStage.module.css";
 import banner from "../../assets/banneret.png";
@@ -13,199 +12,111 @@ function PlayIcon() {
   );
 }
 
-function getPaywallOffer(episode) {
-  if (episode === 6) {
-    return {
-      price: "9,90",
-      fullPrice: "15,90",
-      title: "Continue assistindo",
-      unlockHint: "desbloqueie este episódio e continue assistindo agora",
-    };
-  }
+/* 🔓 verifica acesso local */
+function hasAccess(ep) {
+  const data = JSON.parse(localStorage.getItem("dramabox_access"));
+  if (!data) return false;
+  if (data.full) return true;
+  return data.episodes?.includes(ep);
+}
 
-  if (episode === 7 || episode === 8) {
-    return {
-      price: "6,90",
-      fullPrice: "15,90",
-      title: "Libere os próximos episódios",
-      unlockHint: "adicione créditos e continue assistindo agora",
-    };
-  }
-
-  if (episode === 9 || episode === 10) {
-    return {
-      price: "19,90",
-      fullPrice: "15,90",
-      title: "Série completa",
-      unlockHint: "desbloqueie este episódio ou escolha o acesso completo",
-    };
-  }
-
+function getPaywallOffer(ep) {
+  if (ep === 6)
+    return { price: "9,90", fullPrice: "15,90", title: "Continue assistindo" };
+  if (ep === 7 || ep === 8)
+    return { price: "6,90", fullPrice: "15,90", title: "Libere os próximos episódios" };
+  if (ep >= 9)
+    return { price: "19,90", fullPrice: "15,90", title: "Série completa" };
   return null;
 }
 
-export default function VideoStage({
-  episode = 1,
-  maxEpisode = 49,
-  onChangeEpisode,
-}) {
-  const [openPaywall, setOpenPaywall] = useState(false);
+export default function VideoStage({ episode = 1, maxEpisode = 49, onChangeEpisode }) {
   const [playing, setPlaying] = useState(false);
-
-  const [paywall, setPaywall] = useState({
-    price: "9,90",
-    fullPrice: "15,90",
-    title: "Desbloqueie para continuar",
-    unlockHint: "desbloqueie este episódio e continue assistindo agora",
-  });
+  const [openPaywall, setOpenPaywall] = useState(false);
+  const [paywall, setPaywall] = useState({ price: "9,90", fullPrice: "15,90", title: "" });
 
   const videoRef = useRef(null);
-  const timeoutRef = useRef(null);
-  const paywallShownRef = useRef(false);
-
-  // swipe reels
+  const paywallTimer = useRef(null);
+  const paywallShown = useRef(false);
   const touchStartY = useRef(null);
-  const touchStartX = useRef(null);
 
-  const isMobile =
-    typeof window !== "undefined" ? window.innerWidth < 1024 : false;
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
 
-  // vídeos na CDN até o ep10
-  const hasRemoteVideo = useMemo(
-    () => episode >= 1 && episode <= 10,
-    [episode]
+  const hasVideo = episode >= 1 && episode <= 10;
+  const videoSrc = useMemo(
+    () => (hasVideo ? getEpisodeVideoUrl(episode) : null),
+    [episode, hasVideo]
   );
 
-  const videoSrc = useMemo(() => {
-    if (!hasRemoteVideo) return null;
-    return getEpisodeVideoUrl(episode); // ep5 fallback vem do episodeVideo.js
-  }, [episode, hasRemoteVideo]);
-
-  const offer = useMemo(() => getPaywallOffer(episode), [episode]);
-  const shouldAutoPaywall = !!offer; // ep6-10
-
-  const clearTimer = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = null;
-  };
-
-  const open = () => setOpenPaywall(true);
-  const close = () => {
-    setOpenPaywall(false);
-    paywallShownRef.current = true; // evita reabrir em loop no mesmo play
-  };
-
-  // reset ao trocar episódio
+  /* RESET AO TROCAR EP */
   useEffect(() => {
-    clearTimer();
-    paywallShownRef.current = false;
-    setOpenPaywall(false);
     setPlaying(false);
+    setOpenPaywall(false);
+    paywallShown.current = false;
+    clearTimeout(paywallTimer.current);
 
     if (videoRef.current) {
-      try {
-        videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-      } catch {}
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
     }
+  }, [episode]);
 
-    // estilo reels: no mobile, ao trocar episódio, já começa a tocar
-    if (isMobile && videoSrc) {
-      setPlaying(true);
-    }
-  }, [episode, videoSrc, isMobile]);
+  /* PAYWALL APÓS 4s (SE NÃO TIVER ACESSO) */
+  const schedulePaywall = () => {
+    if (paywallShown.current) return;
+    if (hasAccess(episode)) return;
 
-  // agenda paywall (AGORA 4s)
-  const schedulePaywallIfNeeded = () => {
-    if (!shouldAutoPaywall) return;
-    if (paywallShownRef.current) return;
+    const offer = getPaywallOffer(episode);
+    if (!offer) return;
 
-    if (offer) setPaywall(offer);
+    setPaywall(offer);
 
-    clearTimer();
-    timeoutRef.current = setTimeout(() => {
-      try {
-        videoRef.current?.pause();
-      } catch {}
-      open();
-    }, 4000); // ✅ 4 segundos
+    paywallTimer.current = setTimeout(() => {
+      videoRef.current?.pause();
+      setOpenPaywall(true);
+      paywallShown.current = true;
+    }, 4000);
   };
 
-  const handlePlay = () => {
-    // ep11+ sem vídeo => paywall direto
+  /* PLAY */
+  const handlePlay = (e) => {
+    e.stopPropagation();
+
     if (!videoSrc) {
-      setPaywall({
-        price: "19,90",
-        fullPrice: "15,90",
-        title: "Série completa",
-        unlockHint: "libere o acesso completo para continuar assistindo",
-      });
-      open();
+      setPaywall({ price: "19,90", fullPrice: "15,90", title: "Série completa" });
+      setOpenPaywall(true);
       return;
     }
 
     setPlaying(true);
-    schedulePaywallIfNeeded();
+
+    requestAnimationFrame(() => {
+      videoRef.current?.play().catch(() => {});
+      schedulePaywall();
+    });
   };
 
-  // se autoplay montou o <video>, agenda paywall
-  useEffect(() => {
-    if (!playing) return;
-    if (!videoSrc) return;
-
-    const t = setTimeout(() => {
-      schedulePaywallIfNeeded();
-    }, 0);
-
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, videoSrc, episode]);
-
-  // -------- swipe reels (mobile) --------
-  const clampEpisode = (n) => Math.max(1, Math.min(maxEpisode, n));
-  const goNext = () => onChangeEpisode?.(clampEpisode(episode + 1));
-  const goPrev = () => onChangeEpisode?.(clampEpisode(episode - 1));
-
+  /* SWIPE (SÓ SE JÁ ESTIVER TOCANDO) */
   const onTouchStart = (e) => {
-    if (!isMobile) return;
-    const t = e.touches?.[0];
-    if (!t) return;
-    touchStartY.current = t.clientY;
-    touchStartX.current = t.clientX;
+    if (!isMobile || !playing) return;
+    touchStartY.current = e.touches[0].clientY;
   };
 
   const onTouchEnd = (e) => {
-    if (!isMobile) return;
-    const startY = touchStartY.current;
-    const startX = touchStartX.current;
-    const t = e.changedTouches?.[0];
+    if (!isMobile || !playing) return;
 
+    const endY = e.changedTouches[0].clientY;
+    const delta = endY - touchStartY.current;
     touchStartY.current = null;
-    touchStartX.current = null;
 
-    if (startY == null || startX == null || !t) return;
+    if (Math.abs(delta) < 120) return;
 
-    const deltaY = t.clientY - startY;
-    const deltaX = t.clientX - startX;
-
-    // ✅ só troca ep se for swipe vertical forte (reels feel)
-    if (Math.abs(deltaY) < 80) return;
-    if (Math.abs(deltaX) > Math.abs(deltaY)) return;
-
-    if (deltaY < 0) goNext(); // swipe up
-    else goPrev(); // swipe down
+    if (delta < 0 && episode < maxEpisode) onChangeEpisode?.(episode + 1);
+    if (delta > 0 && episode > 1) onChangeEpisode?.(episode - 1);
   };
 
   return (
-    <section className={styles.stage} aria-label="Player">
-      <div className={styles.backWrap}>
-        <button className={styles.backBtn} type="button" aria-label="Voltar">
-          <span className={styles.backIcon}>
-            <IconButton icon="back" label="Voltar" />
-          </span>
-        </button>
-      </div>
-
+    <section className={styles.stage}>
       <div className={styles.playerShell}>
         <div
           className={styles.player}
@@ -216,8 +127,6 @@ export default function VideoStage({
             <div
               className={styles.poster}
               style={{ backgroundImage: `url(${banner})` }}
-              aria-label="Banner do episódio"
-              role="img"
             />
           )}
 
@@ -227,42 +136,33 @@ export default function VideoStage({
               className={styles.video}
               src={videoSrc}
               controls
-              autoPlay
               playsInline
-              preload="metadata"
             />
           )}
 
-          <div className={styles.watermark}>R</div>
-
-          {/* play sempre visível */}
-          <button
-            className={styles.play}
-            type="button"
-            aria-label="Assistir"
-            onClick={handlePlay}
-          >
+          <button className={styles.play} onClick={handlePlay}>
             <PlayIcon />
           </button>
 
           <div className={styles.episodeBadge}>
             Episódio {episode}
-            {episode >= 6 ? (
-              <span className={styles.premiumTag}>Premium</span>
-            ) : null}
+            {episode >= 6 && <span className={styles.premiumTag}>Premium</span>}
           </div>
         </div>
       </div>
 
       <PaywallModal
         open={openPaywall}
-        onClose={close}
+        onClose={() => setOpenPaywall(false)}
+        episode={episode}
         price={paywall.price}
         fullPrice={paywall.fullPrice}
         title={paywall.title}
-        unlockHint={paywall.unlockHint}
-        onPayEpisode={() => alert("Checkout episódio ainda não integrado 🙂")}
-        onPayFull={() => alert("Checkout completo ainda não integrado 🙂")}
+        onUnlocked={() => {
+          setOpenPaywall(false);
+          setPlaying(true);
+          requestAnimationFrame(() => videoRef.current?.play());
+        }}
       />
     </section>
   );
