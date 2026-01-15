@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  "name": "dramabox-api",
+
+  // 🔥 ENTRY POINT CORRETO
+  "main": "src/index.js",
+
+  // 🔒 data de compatibilidade
+  "compatibility_date": "2026-01-15",
+
+  // 📊 logs no painel Cloudflare
+  "observability": {
+    "enabled": true
+  },
+
+  // 🗄️ KV para pagamentos PIX
+  "kv_namespaces": [
+    {
+      "binding": "PAYMENTS_KV",
+      "id": "7549be858a0f4516adf1ee64e23d0acc"
+    }
+  ]
+}
