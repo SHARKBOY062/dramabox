@@ -6,20 +6,31 @@ import { getEpisodeVideoUrl } from "../../utils/episodeVideo.js";
 
 function PlayIcon() {
   return (
-    <svg viewBox="0 0 24 24" className={styles.playIcon} aria-hidden="true">
+    <svg viewBox="0 0 24 24" className={styles.playIcon}>
       <path fill="currentColor" d="M8 5.5v13l11-6.5-11-6.5Z" />
     </svg>
   );
 }
 
-/* 🔓 verifica acesso local */
-function hasAccess(ep) {
-  const data = JSON.parse(localStorage.getItem("dramabox_access"));
-  if (!data) return false;
-  if (data.full) return true;
-  return data.episodes?.includes(ep);
+/* ===== ACESSO LOCAL ===== */
+function getAccess() {
+  try {
+    return JSON.parse(localStorage.getItem("dramabox_access")) || {
+      full: false,
+      episodes: [],
+    };
+  } catch {
+    return { full: false, episodes: [] };
+  }
 }
 
+function hasAccess(ep) {
+  const access = getAccess();
+  if (access.full) return true;
+  return access.episodes.includes(ep);
+}
+
+/* ===== PAYWALL POR EP ===== */
 function getPaywallOffer(ep) {
   if (ep === 6)
     return { price: "9,90", fullPrice: "15,90", title: "Continue assistindo" };
@@ -33,11 +44,11 @@ function getPaywallOffer(ep) {
 export default function VideoStage({ episode = 1, maxEpisode = 49, onChangeEpisode }) {
   const [playing, setPlaying] = useState(false);
   const [openPaywall, setOpenPaywall] = useState(false);
+  const [blocked, setBlocked] = useState(false); // 🔒 TRAVA REAL
   const [paywall, setPaywall] = useState({ price: "9,90", fullPrice: "15,90", title: "" });
 
   const videoRef = useRef(null);
-  const paywallTimer = useRef(null);
-  const paywallShown = useRef(false);
+  const timerRef = useRef(null);
   const touchStartY = useRef(null);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
@@ -48,12 +59,14 @@ export default function VideoStage({ episode = 1, maxEpisode = 49, onChangeEpiso
     [episode, hasVideo]
   );
 
-  /* RESET AO TROCAR EP */
+  const access = useMemo(getAccess, [episode]);
+
+  /* ===== RESET AO TROCAR EP ===== */
   useEffect(() => {
     setPlaying(false);
     setOpenPaywall(false);
-    paywallShown.current = false;
-    clearTimeout(paywallTimer.current);
+    setBlocked(false);
+    clearTimeout(timerRef.current);
 
     if (videoRef.current) {
       videoRef.current.pause();
@@ -61,9 +74,8 @@ export default function VideoStage({ episode = 1, maxEpisode = 49, onChangeEpiso
     }
   }, [episode]);
 
-  /* PAYWALL APÓS 4s (SE NÃO TIVER ACESSO) */
+  /* ===== PAYWALL APÓS 4s ===== */
   const schedulePaywall = () => {
-    if (paywallShown.current) return;
     if (hasAccess(episode)) return;
 
     const offer = getPaywallOffer(episode);
@@ -71,19 +83,26 @@ export default function VideoStage({ episode = 1, maxEpisode = 49, onChangeEpiso
 
     setPaywall(offer);
 
-    paywallTimer.current = setTimeout(() => {
+    timerRef.current = setTimeout(() => {
       videoRef.current?.pause();
+      setBlocked(true);        // 🔒 trava
       setOpenPaywall(true);
-      paywallShown.current = true;
     }, 4000);
   };
 
-  /* PLAY */
+  /* ===== PLAY ===== */
   const handlePlay = (e) => {
     e.stopPropagation();
 
+    // 🔒 bloqueado → sempre abre paywall
+    if (blocked && !hasAccess(episode)) {
+      setOpenPaywall(true);
+      return;
+    }
+
     if (!videoSrc) {
       setPaywall({ price: "19,90", fullPrice: "15,90", title: "Série completa" });
+      setBlocked(true);
       setOpenPaywall(true);
       return;
     }
@@ -96,17 +115,16 @@ export default function VideoStage({ episode = 1, maxEpisode = 49, onChangeEpiso
     });
   };
 
-  /* SWIPE (SÓ SE JÁ ESTIVER TOCANDO) */
+  /* ===== SWIPE REELS (SÓ SE LIBERADO) ===== */
   const onTouchStart = (e) => {
-    if (!isMobile || !playing) return;
+    if (!isMobile || !playing || blocked) return;
     touchStartY.current = e.touches[0].clientY;
   };
 
   const onTouchEnd = (e) => {
-    if (!isMobile || !playing) return;
+    if (!isMobile || !playing || blocked) return;
 
-    const endY = e.changedTouches[0].clientY;
-    const delta = endY - touchStartY.current;
+    const delta = e.changedTouches[0].clientY - touchStartY.current;
     touchStartY.current = null;
 
     if (Math.abs(delta) < 120) return;
@@ -146,19 +164,23 @@ export default function VideoStage({ episode = 1, maxEpisode = 49, onChangeEpiso
 
           <div className={styles.episodeBadge}>
             Episódio {episode}
-            {episode >= 6 && <span className={styles.premiumTag}>Premium</span>}
+            {!access.full && episode >= 6 && (
+              <span className={styles.premiumTag}>Premium</span>
+            )}
           </div>
         </div>
       </div>
 
       <PaywallModal
         open={openPaywall}
-        onClose={() => setOpenPaywall(false)}
         episode={episode}
         price={paywall.price}
         fullPrice={paywall.fullPrice}
         title={paywall.title}
+        onClose={() => setOpenPaywall(false)}
         onUnlocked={() => {
+          clearTimeout(timerRef.current);
+          setBlocked(false);     // 🔓 LIBERA DE VERDADE
           setOpenPaywall(false);
           setPlaying(true);
           requestAnimationFrame(() => videoRef.current?.play());

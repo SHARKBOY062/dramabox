@@ -14,13 +14,15 @@ export default function PaywallModal({
   const closeBtnRef = useRef(null);
   const pollingRef = useRef(null);
 
-  const [qrCode, setQrCode] = useState(null);
+  const [qrCodeText, setQrCodeText] = useState(null);
   const [externalId, setExternalId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isFullUnlock, setIsFullUnlock] = useState(false);
 
-  /* trava scroll */
+  /* ===== CONTROLE DE ABERTURA ===== */
   useEffect(() => {
     if (!open) return;
+
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeBtnRef.current?.focus();
@@ -28,18 +30,21 @@ export default function PaywallModal({
     return () => {
       document.body.style.overflow = prev;
       clearInterval(pollingRef.current);
-      setQrCode(null);
+      pollingRef.current = null;
+      setQrCodeText(null);
       setExternalId(null);
       setLoading(false);
+      setIsFullUnlock(false);
     };
   }, [open]);
 
   if (!open) return null;
 
-  /* cria PIX */
-  const createPix = async (amount) => {
+  /* ===== CRIAR PIX ===== */
+  const createPix = async (amount, full = false) => {
     try {
       setLoading(true);
+      setIsFullUnlock(full);
 
       const res = await fetch(
         "https://dramabox-api.econocja.workers.dev/pix/create",
@@ -47,50 +52,69 @@ export default function PaywallModal({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            amount: Number(amount.replace(",", ".")),
+            amount: Number(String(amount).replace(",", ".")),
             episode,
           }),
         }
       );
 
+      if (!res.ok) throw new Error("Erro ao criar PIX");
+
       const data = await res.json();
-      setQrCode(data.qr_code_text);
+
+      if (!data.external_id || !data.qr_code_text) {
+        throw new Error("Resposta PIX inválida");
+      }
+
       setExternalId(data.external_id);
+      setQrCodeText(data.qr_code_text);
+      setLoading(false);
+
       startPolling(data.external_id);
     } catch (err) {
-      alert("Erro ao criar pagamento PIX");
+      console.error(err);
+      alert("Erro ao gerar o PIX. Tente novamente.");
       setLoading(false);
     }
   };
 
-  /* polling automático */
+  /* ===== POLLING ===== */
   const startPolling = (external_id) => {
-    pollingRef.current = setInterval(async () => {
-      const res = await fetch(
-        `https://dramabox-api.econocja.workers.dev/pix/status/${external_id}`
-      );
-      const data = await res.json();
+    clearInterval(pollingRef.current);
 
-      if (data.status === "PAID") {
-        clearInterval(pollingRef.current);
-        unlockEpisode();
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `https://dramabox-api.econocja.workers.dev/pix/status/${external_id}`
+        );
+        const data = await res.json();
+
+        if (data.status === "paid") {
+          clearInterval(pollingRef.current);
+          unlockAccess();
+        }
+      } catch (err) {
+        console.error("Polling error", err);
       }
     }, 3000);
   };
 
-  /* libera episódio */
-  const unlockEpisode = () => {
+  /* ===== LIBERAÇÃO ===== */
+  const unlockAccess = () => {
     const access =
       JSON.parse(localStorage.getItem("dramabox_access")) || {
         full: false,
         episodes: [],
       };
 
-    if (!access.episodes.includes(episode)) {
+    if (isFullUnlock) {
+      access.full = true;
+    } else if (!access.episodes.includes(episode)) {
       access.episodes.push(episode);
     }
 
     localStorage.setItem("dramabox_access", JSON.stringify(access));
+
     onUnlocked?.();
     onClose();
   };
@@ -103,13 +127,14 @@ export default function PaywallModal({
           className={styles.close}
           onClick={onClose}
           aria-label="Fechar"
+          type="button"
         >
           ✕
         </button>
 
         <h3 className={styles.title}>{title}</h3>
 
-        {!qrCode && (
+        {!qrCodeText && (
           <>
             <p className={styles.text}>{unlockHint}</p>
 
@@ -117,30 +142,32 @@ export default function PaywallModal({
               <button
                 className={styles.primary}
                 disabled={loading}
-                onClick={() => createPix(fullPrice)}
+                onClick={() => createPix(fullPrice, true)}
               >
-                Assistir todos os episódios — R$ {fullPrice}
+                {loading ? "Gerando PIX..." : `Assistir todos — R$ ${fullPrice}`}
               </button>
 
               <button
                 className={styles.secondary}
                 disabled={loading}
-                onClick={() => createPix(price)}
+                onClick={() => createPix(price, false)}
               >
-                Desbloquear este episódio — R$ {price}
+                {loading ? "Gerando PIX..." : `Desbloquear episódio — R$ ${price}`}
               </button>
             </div>
           </>
         )}
 
-        {qrCode && (
+        {qrCodeText && (
           <>
             <p className={styles.text}>Escaneie o QR Code PIX</p>
 
             <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${qrCode}`}
-              alt="QR Code PIX"
               className={styles.qr}
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
+                qrCodeText
+              )}`}
+              alt="QR Code PIX"
             />
 
             <p className={styles.footnote}>
