@@ -17,24 +17,30 @@ function getPaywallOffer(episode) {
   if (episode === 6) {
     return {
       price: "9,90",
+      fullPrice: "15,90",
       title: "Continue assistindo",
-      unlockHint: "desbloqueie a maior parte da série e siga sem interrupções",
+      unlockHint: "desbloqueie este episódio e continue assistindo agora",
     };
   }
+
   if (episode === 7 || episode === 8) {
     return {
       price: "6,90",
+      fullPrice: "15,90",
       title: "Libere os próximos episódios",
       unlockHint: "adicione créditos e continue assistindo agora",
     };
   }
+
   if (episode === 9 || episode === 10) {
     return {
       price: "19,90",
+      fullPrice: "15,90",
       title: "Série completa",
-      unlockHint: "libere o acesso completo e assista até o final hoje",
+      unlockHint: "desbloqueie este episódio ou escolha o acesso completo",
     };
   }
+
   return null;
 }
 
@@ -48,24 +54,32 @@ export default function VideoStage({
 
   const [paywall, setPaywall] = useState({
     price: "9,90",
-    title: "Desbloqueie o acesso premium",
-    unlockHint: "libere a maior parte dos episódios e continue assistindo agora",
+    fullPrice: "15,90",
+    title: "Desbloqueie para continuar",
+    unlockHint: "desbloqueie este episódio e continue assistindo agora",
   });
 
   const videoRef = useRef(null);
   const timeoutRef = useRef(null);
   const paywallShownRef = useRef(false);
+
+  // swipe reels
   const touchStartY = useRef(null);
+  const touchStartX = useRef(null);
 
   const isMobile =
     typeof window !== "undefined" ? window.innerWidth < 1024 : false;
 
-  const hasLocalVideo = useMemo(() => episode >= 1 && episode <= 10, [episode]);
+  // vídeos na CDN até o ep10
+  const hasRemoteVideo = useMemo(
+    () => episode >= 1 && episode <= 10,
+    [episode]
+  );
 
   const videoSrc = useMemo(() => {
-    if (!hasLocalVideo) return null;
-    return getEpisodeVideoUrl(episode);
-  }, [episode, hasLocalVideo]);
+    if (!hasRemoteVideo) return null;
+    return getEpisodeVideoUrl(episode); // ep5 fallback vem do episodeVideo.js
+  }, [episode, hasRemoteVideo]);
 
   const offer = useMemo(() => getPaywallOffer(episode), [episode]);
   const shouldAutoPaywall = !!offer; // ep6-10
@@ -78,10 +92,10 @@ export default function VideoStage({
   const open = () => setOpenPaywall(true);
   const close = () => {
     setOpenPaywall(false);
-    paywallShownRef.current = true; // evita loop no mesmo play
+    paywallShownRef.current = true; // evita reabrir em loop no mesmo play
   };
 
-  // reseta ao trocar episódio
+  // reset ao trocar episódio
   useEffect(() => {
     clearTimer();
     paywallShownRef.current = false;
@@ -95,13 +109,13 @@ export default function VideoStage({
       } catch {}
     }
 
-    // estilo reels: no mobile, já começa a rodar (se tiver vídeo)
+    // estilo reels: no mobile, ao trocar episódio, já começa a tocar
     if (isMobile && videoSrc) {
       setPlaying(true);
     }
   }, [episode, videoSrc, isMobile]);
 
-  // agenda o paywall depois que começar a tocar
+  // agenda paywall (AGORA 4s)
   const schedulePaywallIfNeeded = () => {
     if (!shouldAutoPaywall) return;
     if (paywallShownRef.current) return;
@@ -110,18 +124,19 @@ export default function VideoStage({
 
     clearTimer();
     timeoutRef.current = setTimeout(() => {
-      // pausa e abre paywall
       try {
         videoRef.current?.pause();
       } catch {}
-      setOpenPaywall(true);
-    }, 2000);
+      open();
+    }, 4000); // ✅ 4 segundos
   };
 
   const handlePlay = () => {
+    // ep11+ sem vídeo => paywall direto
     if (!videoSrc) {
       setPaywall({
         price: "19,90",
+        fullPrice: "15,90",
         title: "Série completa",
         unlockHint: "libere o acesso completo para continuar assistindo",
       });
@@ -130,17 +145,14 @@ export default function VideoStage({
     }
 
     setPlaying(true);
-
-    // ✅ aqui garante o paywall do ep6+ SEM depender de listener
     schedulePaywallIfNeeded();
   };
 
-  // se o vídeo estiver autoplay no mobile, agenda paywall quando o <video> montar
+  // se autoplay montou o <video>, agenda paywall
   useEffect(() => {
     if (!playing) return;
     if (!videoSrc) return;
 
-    // dá 1 tick pro ref existir e então agenda
     const t = setTimeout(() => {
       schedulePaywallIfNeeded();
     }, 0);
@@ -149,30 +161,39 @@ export default function VideoStage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, videoSrc, episode]);
 
-  // -------- Reels swipe (mobile) --------
+  // -------- swipe reels (mobile) --------
   const clampEpisode = (n) => Math.max(1, Math.min(maxEpisode, n));
-
   const goNext = () => onChangeEpisode?.(clampEpisode(episode + 1));
   const goPrev = () => onChangeEpisode?.(clampEpisode(episode - 1));
 
   const onTouchStart = (e) => {
     if (!isMobile) return;
-    touchStartY.current = e.touches?.[0]?.clientY ?? null;
+    const t = e.touches?.[0];
+    if (!t) return;
+    touchStartY.current = t.clientY;
+    touchStartX.current = t.clientX;
   };
 
   const onTouchEnd = (e) => {
     if (!isMobile) return;
     const startY = touchStartY.current;
-    const endY = e.changedTouches?.[0]?.clientY ?? null;
+    const startX = touchStartX.current;
+    const t = e.changedTouches?.[0];
+
     touchStartY.current = null;
-    if (startY == null || endY == null) return;
+    touchStartX.current = null;
 
-    const delta = endY - startY;
-    const threshold = 60;
-    if (Math.abs(delta) < threshold) return;
+    if (startY == null || startX == null || !t) return;
 
-    if (delta < 0) goNext();
-    else goPrev();
+    const deltaY = t.clientY - startY;
+    const deltaX = t.clientX - startX;
+
+    // ✅ só troca ep se for swipe vertical forte (reels feel)
+    if (Math.abs(deltaY) < 80) return;
+    if (Math.abs(deltaX) > Math.abs(deltaY)) return;
+
+    if (deltaY < 0) goNext(); // swipe up
+    else goPrev(); // swipe down
   };
 
   return (
@@ -208,11 +229,13 @@ export default function VideoStage({
               controls
               autoPlay
               playsInline
+              preload="metadata"
             />
           )}
 
           <div className={styles.watermark}>R</div>
 
+          {/* play sempre visível */}
           <button
             className={styles.play}
             type="button"
@@ -235,9 +258,11 @@ export default function VideoStage({
         open={openPaywall}
         onClose={close}
         price={paywall.price}
+        fullPrice={paywall.fullPrice}
         title={paywall.title}
         unlockHint={paywall.unlockHint}
-        onPay={() => alert("Checkout ainda não integrado 🙂")}
+        onPayEpisode={() => alert("Checkout episódio ainda não integrado 🙂")}
+        onPayFull={() => alert("Checkout completo ainda não integrado 🙂")}
       />
     </section>
   );
