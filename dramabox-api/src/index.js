@@ -69,10 +69,15 @@ export default {
         });
 
         if (!pixRes.ok) {
-          throw new Error("BSX_ERROR");
+          const errorText = await pixRes.text();
+          throw new Error(`BSX_ERROR: ${errorText}`);
         }
 
         const pix = await pixRes.json();
+
+        if (!pix.qr_code_text) {
+          throw new Error("BSX_NO_QR_CODE");
+        }
 
         await env.PAYMENTS_KV.put(
           external_id,
@@ -92,7 +97,10 @@ export default {
         );
       } catch (err) {
         return new Response(
-          JSON.stringify({ error: "PIX_CREATE_FAILED" }),
+          JSON.stringify({
+            error: "PIX_CREATE_FAILED",
+            details: String(err),
+          }),
           { status: 500, headers }
         );
       }
@@ -149,9 +157,12 @@ export default {
           JSON.stringify({ ok: true }),
           { headers }
         );
-      } catch {
+      } catch (err) {
         return new Response(
-          JSON.stringify({ error: "WEBHOOK_ERROR" }),
+          JSON.stringify({
+            error: "WEBHOOK_ERROR",
+            details: String(err),
+          }),
           { status: 400, headers }
         );
       }

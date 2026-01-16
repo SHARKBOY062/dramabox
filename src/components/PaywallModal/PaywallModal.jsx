@@ -18,8 +18,11 @@ export default function PaywallModal({
   const [externalId, setExternalId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isFullUnlock, setIsFullUnlock] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  /* ===== CONTROLE DE ABERTURA ===== */
+  /* ======================
+     CONTROLE DE ABERTURA
+  ====================== */
   useEffect(() => {
     if (!open) return;
 
@@ -35,16 +38,26 @@ export default function PaywallModal({
       setExternalId(null);
       setLoading(false);
       setIsFullUnlock(false);
+      setCopied(false);
     };
   }, [open]);
 
   if (!open) return null;
 
-  /* ===== CRIAR PIX ===== */
+  /* ======================
+     CRIAR PIX (BSX)
+     ⚠️ mínimo R$ 10,00
+  ====================== */
   const createPix = async (amount, full = false) => {
     try {
       setLoading(true);
       setIsFullUnlock(full);
+
+      // 🔥 REGRA BSX
+      const normalizedAmount = Math.max(
+        10,
+        Number(String(amount).replace(",", "."))
+      );
 
       const res = await fetch(
         "https://dramabox-api.econocja.workers.dev/pix/create",
@@ -52,7 +65,7 @@ export default function PaywallModal({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            amount: Number(String(amount).replace(",", ".")),
+            amount: normalizedAmount,
             episode,
           }),
         }
@@ -78,7 +91,9 @@ export default function PaywallModal({
     }
   };
 
-  /* ===== POLLING ===== */
+  /* ======================
+     POLLING AUTOMÁTICO
+  ====================== */
   const startPolling = (external_id) => {
     clearInterval(pollingRef.current);
 
@@ -93,13 +108,15 @@ export default function PaywallModal({
           clearInterval(pollingRef.current);
           unlockAccess();
         }
-      } catch (err) {
-        console.error("Polling error", err);
+      } catch {
+        // silencioso (rede instável)
       }
     }, 3000);
   };
 
-  /* ===== LIBERAÇÃO ===== */
+  /* ======================
+     LIBERAR ACESSO
+  ====================== */
   const unlockAccess = () => {
     const access =
       JSON.parse(localStorage.getItem("dramabox_access")) || {
@@ -119,9 +136,23 @@ export default function PaywallModal({
     onClose();
   };
 
+  /* ======================
+     COPIAR PIX
+  ====================== */
+  const copyPix = async () => {
+    try {
+      await navigator.clipboard.writeText(qrCodeText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      alert("Não foi possível copiar o código PIX");
+    }
+  };
+
   return (
     <div className={styles.overlay} role="dialog" aria-modal="true">
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        {/* FECHAR */}
         <button
           ref={closeBtnRef}
           className={styles.close}
@@ -134,6 +165,7 @@ export default function PaywallModal({
 
         <h3 className={styles.title}>{title}</h3>
 
+        {/* ===== ESCOLHA ===== */}
         {!qrCodeText && (
           <>
             <p className={styles.text}>{unlockHint}</p>
@@ -144,7 +176,9 @@ export default function PaywallModal({
                 disabled={loading}
                 onClick={() => createPix(fullPrice, true)}
               >
-                {loading ? "Gerando PIX..." : `Assistir todos — R$ ${fullPrice}`}
+                {loading
+                  ? "Gerando PIX..."
+                  : `Assistir todos — R$ ${fullPrice}`}
               </button>
 
               <button
@@ -152,15 +186,18 @@ export default function PaywallModal({
                 disabled={loading}
                 onClick={() => createPix(price, false)}
               >
-                {loading ? "Gerando PIX..." : `Desbloquear episódio — R$ ${price}`}
+                {loading
+                  ? "Gerando PIX..."
+                  : `Desbloquear episódio — R$ ${price}`}
               </button>
             </div>
           </>
         )}
 
+        {/* ===== QR CODE ===== */}
         {qrCodeText && (
           <>
-            <p className={styles.text}>Escaneie o QR Code PIX</p>
+            <p className={styles.text}>Escaneie ou copie o código PIX</p>
 
             <img
               className={styles.qr}
@@ -169,6 +206,21 @@ export default function PaywallModal({
               )}`}
               alt="QR Code PIX"
             />
+
+            <textarea
+              className={styles.pixCode}
+              readOnly
+              value={qrCodeText}
+              onClick={(e) => e.target.select()}
+            />
+
+            <button
+              className={styles.copyBtn}
+              onClick={copyPix}
+              type="button"
+            >
+              {copied ? "Código copiado ✅" : "Copiar código PIX"}
+            </button>
 
             <p className={styles.footnote}>
               Aguardando confirmação do pagamento…

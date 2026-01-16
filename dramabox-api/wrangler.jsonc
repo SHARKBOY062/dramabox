@@ -1,20 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
 
+  // Nome do Worker (obrigatório)
   "name": "dramabox-api",
 
-  // 🔥 ENTRY POINT CORRETO
+  // Entry point do Worker (JS)
   "main": "src/index.js",
 
-  // 🔒 data de compatibilidade
+  // Data de compatibilidade
   "compatibility_date": "2026-01-15",
 
-  // 📊 logs no painel Cloudflare
+  // Logs e métricas no painel Cloudflare
   "observability": {
     "enabled": true
   },
 
-  // 🗄️ KV para pagamentos PIX
+  // KV Namespace para pagamentos PIX
   "kv_namespaces": [
     {
       "binding": "PAYMENTS_KV",
